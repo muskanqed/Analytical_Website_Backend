@@ -1,13 +1,15 @@
-const express = require('express');
-const { authenticate } = require('../middleware/authMiddleware');
-const { 
+const prisma = require("../utils/prismaClient");
+
+const express = require("express");
+const { authenticate } = require("../middleware/authMiddleware");
+const {
   getWebsiteStats,
   getSessionAnalytics,
   getPageViewAnalytics,
   getEventAnalytics,
-  getTimeSeriesData
-} = require('../controllers/analyticsController');
-const rateLimit = require('express-rate-limit');
+  getTimeSeriesData,
+} = require("../controllers/analyticsController");
+const rateLimit = require("express-rate-limit");
 
 const router = express.Router();
 
@@ -17,29 +19,30 @@ const analyticsLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many requests from this IP, please try again after 15 minutes'
+  message: "Too many requests from this IP, please try again after 15 minutes",
 });
 
 // Apply authentication and rate limiting to all analytics routes
 router.use(authenticate, analyticsLimiter);
 
 // Main website statistics endpoint
-router.get('/stats/:websiteId', async (req, res) => {
+// user website id
+router.get("/stats/:websiteId", async (req, res) => {
   try {
     const { websiteId } = req.params;
     const stats = await getWebsiteStats(websiteId);
-    res.json(stats);
+    return res.status(200).json(stats);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: error.message });
   }
 });
 
 // Session analytics endpoint
-router.get('/sessions/:websiteId', async (req, res) => {
+router.get("/sessions/:websiteId", async (req, res) => {
   try {
     const { websiteId } = req.params;
     const { start, end } = req.query;
-    
+
     const sessions = await getSessionAnalytics(websiteId, { start, end });
     res.json(sessions);
   } catch (error) {
@@ -48,11 +51,11 @@ router.get('/sessions/:websiteId', async (req, res) => {
 });
 
 // Page view analytics endpoint
-router.get('/pageviews/:websiteId', async (req, res) => {
+router.get("/pageviews/:websiteId", async (req, res) => {
   try {
     const { websiteId } = req.params;
     const { path, referrer } = req.query;
-    
+
     const pageViews = await getPageViewAnalytics(websiteId, { path, referrer });
     res.json(pageViews);
   } catch (error) {
@@ -61,11 +64,11 @@ router.get('/pageviews/:websiteId', async (req, res) => {
 });
 
 // Event analytics endpoint
-router.get('/events/:websiteId', async (req, res) => {
+router.get("/events/:websiteId", async (req, res) => {
   try {
     const { websiteId } = req.params;
     const { type } = req.query;
-    
+
     const events = await getEventAnalytics(websiteId, type);
     res.json(events);
   } catch (error) {
@@ -74,20 +77,43 @@ router.get('/events/:websiteId', async (req, res) => {
 });
 
 // Time series data endpoint
-router.get('/timeseries/:websiteId', async (req, res) => {
+router.get("/timeseries/:websiteId", async (req, res) => {
   try {
     const { websiteId } = req.params;
-    const { start, end, interval = 'day' } = req.query;
-    
-    const timeSeries = await getTimeSeriesData(websiteId, { 
-      start, 
-      end, 
-      interval 
+    const { start, end, interval = "day" } = req.query;
+
+    const timeSeries = await getTimeSeriesData(websiteId, {
+      start,
+      end,
+      interval,
     });
-    
+
     res.json(timeSeries);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/create", authenticate, async (req, res) => {
+  try {
+    const user = req.user;
+    const { domain } = req.body;
+    console.log(user.userId);
+    const newWebsite = await prisma.website.create({
+      data: {
+        domain,
+        ownerId: user.userId,
+      },
+    });
+    return res.status(200).json({
+      message: "website has been created",
+      website: newWebsite,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,
+      error: "something went wrong!",
+    });
   }
 });
 

@@ -1,17 +1,24 @@
+const formatUptime = require("./utils/formatUptime.js");
+
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const helmet = require("helmet");
-const morgan = require("morgan");
+const morgan = require("morgan"); // logging middleware
 const bodyParser = require("body-parser");
 const userRoutes = require("./routes/userRoute");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+const websitesRoutes = require("./routes/websiteRoutes.js");
+const trackingRoutes = require("./routes/trackingRoutes.js");
 const { globalLimiter } = require("./utils/rateLimiter");
 const errorHandler = require("./middleware/errorMiddleware");
 const { setupWebSocket } = require("./services/websocketService");
 const prisma = require("./utils/prismaClient");
+const path = require("path");
 
-dotenv.config();
+
+dotenv.config({}); // to load the envs
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,25 +36,33 @@ const checkDatabaseConnection = async () => {
 
 // Middleware
 app.use(globalLimiter);
-app.use(helmet());
 app.use(
-  cors({
-    origin: process.env.CLIENT_URL,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+  helmet({
+    crossOriginResourcePolicy: false,
   })
 );
-app.use(bodyParser.json());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+  })
+);
+app.use(express.json());
 app.use(morgan("combined"));
+app.set("trust proxy", true);
+app.use(express.static(path.join(__dirname, "static")));
 
 // Routes
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/analytics", analyticsRoutes);
+app.use("/api/v1/websites", websitesRoutes);
+app.use("/api/v1", trackingRoutes);
 
 // Health Check endpoint
 app.get("/api/v1/health", (req, res) => {
   res.status(200).json({
     status: "ok",
+    ip: req.headers,
+    uptime: formatUptime(process.uptime()),
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version,
   });
@@ -56,7 +71,7 @@ app.get("/api/v1/health", (req, res) => {
 // Error handling
 app.use(errorHandler);
 app.use((req, res) => {
-  res.status(404).json({ error: "Endpoint not found" });
+  res.status(404).json({ error: "Endpoint not found", href: "/api/v1/health" });
 });
 
 // Start server with WebSocket support

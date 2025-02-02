@@ -12,31 +12,31 @@ const getWebsiteStats = async (websiteId) => {
         where: { session: { websiteId } },
       }),
       prisma.$queryRaw`
+SELECT 
+    AVG(EXTRACT(EPOCH FROM (sub."lastActivity" - sub."createdAt"))/60) AS avg_duration,
+    COUNT(*) FILTER (WHERE sub.page_view_count = 1) AS bounce_sessions
+    FROM (
         SELECT 
-          AVG(EXTRACT(EPOCH FROM (last_activity - created_at))) as avg_duration,
-          COUNT(*) FILTER (WHERE page_view_count = 1) as bounce_sessions
-        FROM (
-          SELECT 
             s.id,
-            s.created_at,
-            s.last_activity,
-            COUNT(pv.id) as page_view_count
-          FROM "Session" s
-          LEFT JOIN "PageView" pv ON s.id = pv.session_id
-          WHERE s.website_id = ${websiteId}
-          GROUP BY s.id
-        ) sub
-      `,
+            s."createdAt",
+            s."lastActivity",
+            COUNT(pv.id) AS page_view_count
+        FROM "Session" s
+        LEFT JOIN "PageView" pv ON s.id = pv."sessionId"
+        WHERE s."websiteId" = ${websiteId}
+        GROUP BY s.id, s."createdAt", s."lastActivity"
+    ) sub;
+`,
     ]);
 
     const { avg_duration, bounce_sessions } = durationResult[0];
-    const totalSessions = Number(sessions) || 1;
+    const totalSessions = parseInt(sessions, 10);
 
     return {
       sessions,
       pageViews,
       events,
-      avgDuration: Number(avg_duration || 0),
+      avgDuration: Math.round(avg_duration * 100) / 100,
       bounceRate: (Number(bounce_sessions) / totalSessions) * 100 || 0,
       avgPagesPerSession: pageViews / totalSessions || 0,
     };

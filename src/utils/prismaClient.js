@@ -4,6 +4,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function shutdown() {
+  // database connection disconnection
   await prisma.$disconnect();
 }
 

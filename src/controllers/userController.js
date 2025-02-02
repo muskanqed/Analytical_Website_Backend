@@ -1,17 +1,13 @@
 const prisma = require("../utils/prismaClient");
 
 const jwt = require("jsonwebtoken");
-const { PrismaClient } = require("@prisma/client");
 const { comparePassword, hashPassword } = require("../services/bcryptService");
 const { generateToken } = require("../services/authService");
 
 const createUser = async (req, res) => {
   const data = req.body;
-  console.log(data);
-
   try {
     const hashedPassword = await hashPassword(data.password);
-
     const user = await prisma.user.create({
       data: {
         ...data,
@@ -33,7 +29,7 @@ const createUser = async (req, res) => {
     res
       .status(500)
       .json({ error: "Error creating user", message: error.message });
-      console.error("Error creating user:", error);
+    console.error("Error creating user:", error);
   }
 };
 
@@ -56,7 +52,7 @@ const loginUser = async (req, res) => {
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "4d" }
     );
 
     res.status(200).json({
@@ -82,4 +78,22 @@ const getUsers = async (req, res) => {
   }
 };
 
-module.exports = { createUser, loginUser, getUsers };
+const getUser = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+    });
+    return res.status(200).json({
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Error fetching user",
+    });
+  }
+};
+
+module.exports = { createUser, loginUser, getUsers, getUser };
